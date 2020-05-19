@@ -2,9 +2,9 @@ package com.crossoverjie.cim.server.server;
 
 import com.crossoverjie.cim.common.constant.Constants;
 import com.crossoverjie.cim.common.protocol.CIMRequestProto;
+import com.crossoverjie.cim.server.api.vo.req.SendMsgReqVO;
 import com.crossoverjie.cim.server.init.CIMServerInitializer;
 import com.crossoverjie.cim.server.util.SessionSocketHolder;
-import com.crossoverjie.cim.server.vo.req.SendMsgReqVO;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
@@ -61,7 +61,7 @@ public class CIMServer {
 
         ChannelFuture future = bootstrap.bind().sync();
         if (future.isSuccess()) {
-            LOGGER.info("启动 cim server 成功");
+            LOGGER.info("Start cim server success!!!");
         }
     }
 
@@ -73,19 +73,19 @@ public class CIMServer {
     public void destroy() {
         boss.shutdownGracefully().syncUninterruptibly();
         work.shutdownGracefully().syncUninterruptibly();
-        LOGGER.info("关闭 cim server 成功");
+        LOGGER.info("Close cim server success!!!");
     }
 
 
     /**
-     * 发送 Google Protocol 编码消息
+     * Push msg to client.
      * @param sendMsgReqVO 消息
      */
     public void sendMsg(SendMsgReqVO sendMsgReqVO){
         NioSocketChannel socketChannel = SessionSocketHolder.get(sendMsgReqVO.getUserId());
 
         if (null == socketChannel) {
-            throw new NullPointerException("客户端[" + sendMsgReqVO.getUserId() + "]不在线！");
+            LOGGER.error("client {} offline!", sendMsgReqVO.getUserId());
         }
         CIMRequestProto.CIMReqProtocol protocol = CIMRequestProto.CIMReqProtocol.newBuilder()
                 .setRequestId(sendMsgReqVO.getUserId())
@@ -95,6 +95,6 @@ public class CIMServer {
 
         ChannelFuture future = socketChannel.writeAndFlush(protocol);
         future.addListener((ChannelFutureListener) channelFuture ->
-                LOGGER.info("服务端手动发送 Google Protocol 成功={}", sendMsgReqVO.toString()));
+                LOGGER.info("server push msg:[{}]", sendMsgReqVO.toString()));
     }
 }

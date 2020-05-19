@@ -2,13 +2,14 @@ package com.crossoverjie.cim.route.cache;
 
 import com.crossoverjie.cim.route.kit.ZKit;
 import com.google.common.cache.LoadingCache;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Function: 服务器节点缓存
@@ -20,15 +21,13 @@ import java.util.concurrent.atomic.AtomicLong;
 @Component
 public class ServerCache {
 
+    private static Logger logger = LoggerFactory.getLogger(ServerCache.class) ;
 
     @Autowired
     private LoadingCache<String, String> cache;
 
     @Autowired
     private ZKit zkUtil;
-
-    private AtomicLong index = new AtomicLong();
-
 
     public void addCache(String key) {
         cache.put(key, key);
@@ -38,12 +37,18 @@ public class ServerCache {
     /**
      * 更新所有缓存/先删除 再新增
      *
-     * @param currentChilds
+     * @param currentChildren
      */
-    public void updateCache(List<String> currentChilds) {
+    public void updateCache(List<String> currentChildren) {
         cache.invalidateAll();
-        for (String currentChild : currentChilds) {
-            String key = currentChild.split("-")[1];
+        for (String currentChild : currentChildren) {
+            // currentChildren=ip-127.0.0.1:11212:9082 or 127.0.0.1:11212:9082
+            String key ;
+            if (currentChild.split("-").length == 2){
+                key = currentChild.split("-")[1];
+            }else {
+                key = currentChild ;
+            }
             addCache(key);
         }
     }
@@ -54,7 +59,7 @@ public class ServerCache {
      *
      * @return
      */
-    public List<String> getAll() {
+    public List<String> getServerList() {
 
         List<String> list = new ArrayList<>();
 
@@ -73,20 +78,10 @@ public class ServerCache {
     }
 
     /**
-     * 选取服务器
-     *
-     * @return
+     * rebuild cache list
      */
-    public String selectServer() {
-        List<String> all = getAll();
-        if (all.size() == 0) {
-            throw new RuntimeException("CIM 服务器可用服务列表为空");
-        }
-        Long position = index.incrementAndGet() % all.size();
-        if (position < 0) {
-            position = 0L;
-        }
-
-        return all.get(position.intValue());
+    public void rebuildCacheList(){
+        updateCache(getServerList()) ;
     }
+
 }

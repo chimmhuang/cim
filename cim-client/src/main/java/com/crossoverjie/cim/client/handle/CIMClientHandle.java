@@ -1,12 +1,15 @@
 package com.crossoverjie.cim.client.handle;
 
+import com.crossoverjie.cim.client.service.EchoService;
+import com.crossoverjie.cim.client.service.ReConnectManager;
 import com.crossoverjie.cim.client.service.ShutDownMsg;
-import com.crossoverjie.cim.client.thread.ReConnectJob;
+import com.crossoverjie.cim.client.service.impl.EchoServiceImpl;
 import com.crossoverjie.cim.client.util.SpringBeanFactory;
 import com.crossoverjie.cim.common.constant.Constants;
 import com.crossoverjie.cim.common.protocol.CIMRequestProto;
 import com.crossoverjie.cim.common.protocol.CIMResponseProto;
 import com.crossoverjie.cim.common.util.NettyAttrUtil;
+import com.vdurmont.emoji.EmojiParser;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
@@ -18,7 +21,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Function:
@@ -38,7 +40,11 @@ public class CIMClientHandle extends SimpleChannelInboundHandler<CIMResponseProt
 
     private ScheduledExecutorService scheduledExecutorService ;
 
+    private ReConnectManager reConnectManager ;
+
     private ShutDownMsg shutDownMsg ;
+
+    private EchoService echoService ;
 
 
     @Override
@@ -46,8 +52,6 @@ public class CIMClientHandle extends SimpleChannelInboundHandler<CIMResponseProt
 
         if (evt instanceof IdleStateEvent){
             IdleStateEvent idleStateEvent = (IdleStateEvent) evt ;
-
-            //LOGGER.info("定时检测服务端是否存活");
 
             if (idleStateEvent.state() == IdleState.WRITER_IDLE){
                 CIMRequestProto.CIMReqProtocol heartBeat = SpringBeanFactory.getBean("heartBeat",
@@ -67,7 +71,6 @@ public class CIMClientHandle extends SimpleChannelInboundHandler<CIMResponseProt
 
     @Override
     public void channelActive(ChannelHandlerContext ctx) throws Exception {
-
         //客户端和服务端建立连接时调用
         LOGGER.info("cim server connect success!");
     }
@@ -86,14 +89,18 @@ public class CIMClientHandle extends SimpleChannelInboundHandler<CIMResponseProt
 
         if (scheduledExecutorService == null){
             scheduledExecutorService = SpringBeanFactory.getBean("scheduledTask",ScheduledExecutorService.class) ;
+            reConnectManager = SpringBeanFactory.getBean(ReConnectManager.class) ;
         }
         LOGGER.info("客户端断开了，重新连接！");
-        // TODO: 2019-01-22 后期可以改为不用定时任务，连上后就关闭任务 节省性能。
-        scheduledExecutorService.scheduleAtFixedRate(new ReConnectJob(ctx),0,10, TimeUnit.SECONDS) ;
+        reConnectManager.reConnect(ctx);
     }
 
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, CIMResponseProto.CIMResProtocol msg) throws Exception {
+        if (echoService == null){
+            echoService = SpringBeanFactory.getBean(EchoServiceImpl.class) ;
+        }
+
 
         //心跳更新时间
         if (msg.getType() == Constants.CommandType.PING){
@@ -105,7 +112,9 @@ public class CIMClientHandle extends SimpleChannelInboundHandler<CIMResponseProt
             //回调消息
             callBackMsg(msg.getResMsg());
 
-            LOGGER.info(msg.getResMsg());
+            //将消息中的 emoji 表情格式化为 Unicode 编码以便在终端可以显示
+            String response = EmojiParser.parseToUnicode(msg.getResMsg());
+            echoService.echo(response);
         }
 
 
